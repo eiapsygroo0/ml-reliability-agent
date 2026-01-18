@@ -57,6 +57,12 @@ class StdioJsonRpcClient:
             resp = json.loads(line)
             if "error" in resp and resp["error"] is not None:
                 raise RuntimeError(f"RPC error: {resp["error"]}")
+            
+    def list_tools(self) -> Dict[str, Any]:
+        return self._rpc("tools.list", {})
+    
+    def call(self, tool_name: str, args:Dict[str, Any]) -> Dict[str, Any]:
+        return self._rpc("tools.call", {"name": tool_name, "args":args})
         
     
         

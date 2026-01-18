@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Any
-from src.simulator import LocalPipelineSimulator
+from src.simulator.simulator import LocalPipelineSimulator
 
 class Tools:
     def __init__(self, sim: LocalPipelineSimulator):
