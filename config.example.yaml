@@ -1,0 +1,5 @@
+# Example config (set SRE_CONFIG_PATH to this file, or pass --config)
+policy:
+  auto_approval_min_confidence: 0.75
+  env: local
+memory_path: null  # set to a path to persist IncidentMemory, e.g. data/memory.json

@@ -95,7 +95,7 @@ def main() -> None:
     def init_run(pipeline: str, stage: str, scenario: str) -> Dict[str, Any]:
         run = sim.create_run(pipeline, stage)
         sim.set_scenario(run.run_id, scenario)
-        return {"run_id": run.run_Id}
+        return {"run_id": run.run_id}
     
     while True:
         line = sys.stdin.readline()
@@ -107,7 +107,7 @@ def main() -> None:
             req = json.loads(line)
             method = req.get("method")
             rid = req.get("id")
-            params = req.get("param") or {}
+            params = req.get("params") or req.get("param") or {}
             if req.get("jsonrpc") != "2.0":
                 raise ValueError("Invalid jsonrpc version")
             
@@ -131,4 +131,6 @@ def main() -> None:
         except Exception as e:
             _send({"jsonrpc": "2.0", "id": req.get("id", None), "error": {"code": -32000, "message": str(e)}})
 
-    
+
+if __name__ == "__main__":
+    main()

@@ -21,7 +21,7 @@ class StdioJsonRpcClient:
             text=True,
             bufsize=1,
         )
-        self._lock = threading.lock()
+        self._lock = threading.Lock()
         self._next_id = 1
         
     def close(self) -> None:
@@ -56,8 +56,10 @@ class StdioJsonRpcClient:
             
             resp = json.loads(line)
             if "error" in resp and resp["error"] is not None:
-                raise RuntimeError(f"RPC error: {resp["error"]}")
-            
+                err = resp["error"]
+                raise RuntimeError(f"RPC error: {err}")
+            return resp.get("result", {})
+    
     def list_tools(self) -> Dict[str, Any]:
         return self._rpc("tools.list", {})
     

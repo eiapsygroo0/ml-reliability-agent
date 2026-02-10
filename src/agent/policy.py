@@ -1,14 +1,14 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from src.agent.models import Diagnosis, Plan, PlanStep
 
 @dataclass
 class PolicyConfig:
-    auto_approval_min_confidence = 0.75
-    require_approval_for_risk: set[str] | None = None
-    env: str = "local" # "staging" | "prod" Later
-    
-    def __post_init(self):
+    auto_approval_min_confidence: float = 0.75
+    require_approval_for_risk: set[str] | None = field(default=None, repr=False)
+    env: str = "local"  # "staging" | "prod" Later
+
+    def __post_init__(self) -> None:
         if self.require_approval_for_risk is None:
             self.require_approval_for_risk = {"high"}
             

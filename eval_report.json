@@ -1,0 +1,63 @@
+{
+  "success_rate": 0.0,
+  "diagnosis_match_rate": 1.0,
+  "avg_steps": 1.8333333333333333,
+  "avg_cost_units": 1.3166666666666667,
+  "avg_seconds": 0.004054069519042969,
+  "results": [
+    {
+      "scenario": "oom",
+      "success": false,
+      "diagnosis_ok": true,
+      "steps": 2,
+      "risk_overall": "medium",
+      "cost": 1.5,
+      "seconds": 0.006662130355834961
+    },
+    {
+      "scenario": "missing_partition",
+      "success": false,
+      "diagnosis_ok": true,
+      "steps": 2,
+      "risk_overall": "low",
+      "cost": 2.5,
+      "seconds": 0.004160881042480469
+    },
+    {
+      "scenario": "schema_mismatch",
+      "success": false,
+      "diagnosis_ok": true,
+      "steps": 1,
+      "risk_overall": "high",
+      "cost": 0.1,
+      "seconds": 0.0027539730072021484
+    },
+    {
+      "scenario": "null_spike",
+      "success": false,
+      "diagnosis_ok": true,
+      "steps": 2,
+      "risk_overall": "medium",
+      "cost": 1.2,
+      "seconds": 0.003467082977294922
+    },
+    {
+      "scenario": "dependency_outage",
+      "success": false,
+      "diagnosis_ok": true,
+      "steps": 2,
+      "risk_overall": "low",
+      "cost": 1.2,
+      "seconds": 0.0039060115814208984
+    },
+    {
+      "scenario": "sla_miss",
+      "success": false,
+      "diagnosis_ok": true,
+      "steps": 2,
+      "risk_overall": "medium",
+      "cost": 1.4,
+      "seconds": 0.003374338150024414
+    }
+  ]
+}

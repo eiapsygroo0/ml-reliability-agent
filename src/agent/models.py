@@ -45,7 +45,7 @@ class Plan(BaseModel):
     steps: List[PlanStep]
     expected_outcome: str
     risk_overall: Severity = "low"
-    total_cost_unit: float = 0.0
+    total_cost_units: float = 0.0
     
 class VerificationResult(BaseModel):
     healthy: bool

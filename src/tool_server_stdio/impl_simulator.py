@@ -1,6 +1,6 @@
 from __future__ import annotations
 from src.simulator.simulator import LocalPipelineSimulator
-from src.tool_registry import schema as S
+from src.tool_registry import schemas as S
 
 class SimulatorToolImpl:
     def __init__(self, sim: LocalPipelineSimulator):

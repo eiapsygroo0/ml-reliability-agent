@@ -42,4 +42,4 @@ class ToolRegistry:
         if not isinstance(out, spec.output_model):
             raise TypeError(f"Handler returned {type(out)}, expected {spec.output_model}")
         
-        return out.model_dump
+        return out.model_dump()

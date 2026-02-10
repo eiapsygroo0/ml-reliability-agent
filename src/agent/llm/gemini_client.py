@@ -45,8 +45,8 @@ class GeminiClient:
             model = self.cfg.model,
             contents=prompt,
             config={
-                "temperature": self.config.temperature,
-                "max_output_tokens": self.config.max_output_tokens,
+                "temperature": self.cfg.temperature,
+                "max_output_tokens": self.cfg.max_output_tokens,
             },
         )
         text = resp.text or ""

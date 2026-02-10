@@ -1,0 +1,34 @@
+# Expected behavior per scenario for regression / CI.
+# diagnosis.category: expected root_cause category from diagnosis
+# fixable: whether the agent is expected to recover (verification healthy) with the default simulator
+scenarios:
+  oom:
+    diagnosis:
+      category: infra
+      subtype: oom
+    fixable: true
+  missing_partition:
+    diagnosis:
+      category: data
+      subtype: missing_partition
+    fixable: true
+  schema_mismatch:
+    diagnosis:
+      category: code
+      subtype: schema_mismatch
+    fixable: false
+  null_spike:
+    diagnosis:
+      category: data
+      subtype: null_spike
+    fixable: true
+  dependency_outage:
+    diagnosis:
+      category: dependency
+      subtype: dependency_outage
+    fixable: true
+  sla_miss:
+    diagnosis:
+      category: performance
+      subtype: sla_miss
+    fixable: true

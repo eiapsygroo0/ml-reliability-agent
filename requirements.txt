@@ -1,0 +1,13 @@
+# Core
+pydantic>=2.0.0
+rich>=13.0.0
+PyYAML>=6.0
+
+# LLM (optional; set GEMINI_API_KEY to enable)
+google-genai>=1.0.0
+
+# MCP tool server (optional)
+mcp>=1.0.0
+
+# Embedding RAG (optional; for EmbeddingRunbookRAG)
+# sentence-transformers>=2.0.0
