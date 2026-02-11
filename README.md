@@ -1,4 +1,4 @@
-# agent_ai – SRE Agent for ML/Data Pipelines
+# SRE Agent for ML/Data Pipelines
 
 An **SRE (Site Reliability Engineer) agent** that diagnoses pipeline failures, plans remediation, and executes steps with or without human approval. It targets ML/data pipeline reliability: root-cause diagnosis from logs and health checks, policy-gated plans, and verification.
 
