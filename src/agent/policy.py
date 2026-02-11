@@ -30,6 +30,9 @@ class PolicyEngine:
         return False
     
     def apply(self, plan: Plan, diagnosis: Diagnosis) -> Plan:
-        for step in plan.steps:
-            step.approval_required = self.step_require_approval(step, diagnosis)
-        return plan
+        """Return a new Plan with approval_required set on each step (does not mutate the original)."""
+        new_steps = [
+            step.model_copy(update={"approval_required": self.step_require_approval(step, diagnosis)})
+            for step in plan.steps
+        ]
+        return plan.model_copy(update={"steps": new_steps})

@@ -22,6 +22,7 @@ class IncidentMemory:
         return cls(_path=p)
 
     def load(self, path: str | Path) -> None:
+        """Load stats from JSON file. Best-effort: malformed or missing fields are ignored."""
         path = Path(path)
         if not path.exists():
             return

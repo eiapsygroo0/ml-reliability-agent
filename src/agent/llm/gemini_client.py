@@ -18,20 +18,26 @@ class GeminiClient:
         self.client = genai.client()
         
     def _extract_json(self, text: str) -> Dict[str, Any]:
-        """ 
-        Robust-ish JSON extraction
-        -allow fenced blocks
-        -find first '{'
+        """
+        Extract a single JSON object from text (fenced blocks or raw).
+        Uses brace matching so nested objects parse correctly.
         """
         if "```" in text:
             parts = [p for p in text.split("```") if p.strip()]
             text = max(parts, key=len)
-        
+
         start = text.find("{")
-        end = text.find("}")
-        if start == -1 or end == -1 or end <= start:
+        if start == -1:
             raise ValueError(f"Model did not return JSON. RAW: {text[:400]}")
-        return json.loads(text[start:end+1])
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return json.loads(text[start : i + 1])
+        raise ValueError(f"No matching closing brace for JSON. RAW: {text[:400]}")
     
     def generate_json(self, *, system: str, user: str, schema: type[BaseModel]) -> BaseModel:
         prompt = f""" System:

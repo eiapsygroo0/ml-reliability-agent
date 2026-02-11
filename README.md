@@ -2,6 +2,17 @@
 
 An **SRE (Site Reliability Engineer) agent** that diagnoses pipeline failures, plans remediation, and executes steps with or without human approval. It targets ML/data pipeline reliability: root-cause diagnosis from logs and health checks, policy-gated plans, and verification.
 
+## What this demonstrates
+
+- **Agent loop**: Diagnose → Plan → Act → Verify with a single entrypoint (main or eval).
+- **Dual strategy**: Rule-based and LLM (Gemini) with fallback so behavior is predictable without an API key.
+- **Policy-gated execution**: Approval required by risk, confidence, and category (e.g. code changes).
+- **Tool abstraction**: One registry drives both stdio JSON-RPC and MCP; tools run in a separate process.
+- **Deterministic eval**: Six failure scenarios with expected diagnosis matrix and optional regression check in CI.
+- **Optional RAG**: Keyword retrieval over runbooks when building plans.
+
+Designed so a real pipeline backend can be plugged in via the same tool interface; this repo uses a **simulator** only.
+
 ## Features
 
 - **Diagnose**: Uses logs, health checks, and DQ (data quality) to infer root cause (rule-based or LLM with Gemini).
@@ -15,7 +26,7 @@ Tools run in a **separate process** via stdio JSON-RPC; a **simulator** provides
 ## Architecture
 
 ```
-┌─────────────┐     ┌──────────────────────────────────────────┐
+┌─────────────┐     ┌───────────────────────────────────────────┐
 │  main/eval  │────▶│  SREAgent (diagnose → plan → act → verify)│
 └─────────────┘     │  + PolicyEngine, IncidentMemory, RAG, LLM │
                     └─────────────────┬────────────────────────┘
@@ -25,6 +36,21 @@ Tools run in a **separate process** via stdio JSON-RPC; a **simulator** provides
                     │  StdioJsonRpcClient → Tool Server (stdio)  │
                     │  Registry → SimulatorToolImpl → Simulator │
                     └──────────────────────────────────────────┘
+```
+
+## Quick start
+
+Tested with Python 3.11.
+
+```bash
+pip install -r requirements.txt
+python -m src.app.main --scenario oom --auto_approve
+```
+
+You should see panels for Diagnosis, Plan, and Verification. To run all scenarios and write a report:
+
+```bash
+python -m src.app.eval --report eval_report.json
 ```
 
 ## Setup
@@ -57,6 +83,26 @@ Tools run in a **separate process** via stdio JSON-RPC; a **simulator** provides
 
   Prints per-scenario success, diagnosis match vs scenario matrix, steps, risk, cost, and time. Use `--report` to write a JSON report. Use `--assert_diagnosis` to exit non-zero if any scenario’s diagnosis does not match `src/app/scenarios.yaml`.
 
+## Testing
+
+- **Unit and integration tests** (pytest):
+
+  ```bash
+  pytest tests/ -v
+  ```
+
+- **Evaluation** (all scenarios, diagnosis regression):
+
+  ```bash
+  python -m src.app.eval --assert_diagnosis
+  ```
+
+  CI runs both; `--assert_diagnosis` fails the build if any scenario’s diagnosis does not match `src/app/scenarios.yaml`.
+
+## Evaluation / Results
+
+The eval report (e.g. `eval_report.json`) contains `success_rate`, `diagnosis_match_rate`, `avg_steps`, `avg_cost_units`, `avg_seconds`, and per-scenario results. **Success** means verification passed (schema + DQ + consecutive successes) after the agent’s plan. Sample: diagnosis match 100% across scenarios; see `eval_report.json` in the repo.
+
 ## Runbooks and tools
 
 - Runbooks live in `src/runbooks/` (e.g. `pipeline_runbook.md`). The agent can use a RAG over runbooks when provided via `SimpleRunbookRAG` (keyword retrieval; optional).
@@ -65,14 +111,16 @@ Tools run in a **separate process** via stdio JSON-RPC; a **simulator** provides
 ## Project layout
 
 - `src/agent/` – SREAgent, policy, memory, models, LLM client and prompts
-- `src/app/` – `main.py` (single scenario), `eval.py` (batch eval)
+- `src/app/` – `main.py` (single scenario), `eval.py` (batch eval), `scenarios.yaml` (expected diagnosis matrix)
 - `src/rag.py` – Simple runbook RAG (keyword overlap)
 - `src/simulator/` – Pipeline simulator and failure scenarios
 - `src/tool_api/` – Tool client (stdio JSON-RPC) and helpers
-- `src/tool_registry/` – Tool specs and schemas
+- `src/tool_registry/` – Tool specs and schemas (single source for stdio and MCP)
 - `src/tool_server_stdio/` – Stdio tool server and simulator-backed impl
-- `src/tool_server_mcp/` – MCP server (optional)
+- `src/tool_server_mcp/` – MCP server (optional; same tools via FastMCP)
 - `src/runbooks/` – Markdown runbooks
+- `tests/` – Unit tests (policy, memory, agent, registry) and one integration test
+- `ARCHITECTURE.md` – Data flow and design choices
 
 ## License
 

@@ -10,9 +10,10 @@ from src.rag import SimpleRunbookRAG
 from src.agent.llm.gemini_client import GeminiClient
 from src.agent.llm.prompts import DIAGNOSE_SYSTEM, PLAN_SYSTEM
 
-import os
 import json
-from typing import Any, Dict, List, Optional
+import os
+import time
+from typing import Any, Callable, Dict, List, Optional
 
 console = Console()
 
@@ -31,64 +32,8 @@ class SREAgent:
         self.memory = memory or IncidentMemory()
         self.llm = llm
         self.use_llm = use_llm and bool(os.getenv("GEMINI_API_KEY"))
-        
-    # def diagnose(self, incident: Incident) -> Diagnosis:
-    #     logs = self.tools.get_logs(incident.run_id)
-       
-    def diagnose(self, incident:Incident) -> Diagnosis:
-        logs = self.tools.get_logs(incident.run_id)
-        health = self.tools.verify_health(pipeline=incident.pipeline)["checks"]
-        dq = self.tools.dq_check(pipeline=incident.pipeline)["dq"]
-        
-        # LLM-first(if configured), fallback to rules
-        if self.llm is not None:
-            user = {
-                "incident": incident.model_dump(),
-                "logs": logs,
-                "health": health,
-                "dq": dq,
-            }
-            try:
-                return self.llm.generate_json(
-                    system=DIAGNOSE_SYSTEM,
-                    user=json.dumps(user, indent=2),
-                    schema=Diagnosis,
-                )
-                
-            except Exception:
-                evidence = incident.evidence + [logs]
-        
-                # # Rule-based diagnosis (robust for MVP)
-                # if "column" in logs or "schema" in logs:
-                #     return Diagnosis(root_cause="schema_mismatch", confidence=0.89, evidence=evidence)
-                # if "column" in logs or "schema" in logs:
-                #     return Diagnosis(root_cause="missing_partition", confidence=0.85, evidence=evidence)
-                # if "out of memory" in logs or "OOM" in logs:
-                #     return Diagnosis(root_cause="oom", confidence=0.85, evidence=evidence)
-                if "partition" in logs or "not found" in logs:
-                    rc = RootCause(category="data", subtype="missing_partition", confidence=0.85, evidence=evidence)
-                    return Diagnosis(root_cause=rc, notes="missing partition detected from logs.")
-                
-                if "OOM" in logs or "out of memory" in logs:
-                    rc = RootCause(category="infra",subtype="oom", confidence=0.85, evidence=evidence)
-                    return Diagnosis(root_cause=rc, notes="OOM detected from logs.")
-                if "schema mismatch" in logs or "column" in logs:
-                    rc = RootCause(category="code", subtype="schema_mismatch", confidence=0.80, evidence=evidence)
-                    return Diagnosis(root_cause=rc, notes="Schema mismatch usually needs code/config update.")
-                if "dependency" in logs or "timeout" in logs or "5xx" in logs:
-                    rc = RootCause(category="dependency", subtype="dependency_outage", confidence=0.80, evidence=evidence)
-                    return Diagnosis(root_cause=rc, notes="Dependency outage suspected from logs.")
-                if "SLA" in logs or "backlog" in logs or "slow" in logs:
-                    rc = RootCause(category="performance", subtype="sla_miss", confidence=0.75, evidence=evidence)
-                    return Diagnosis(root_cause=rc, notes="Performance/SLA issue suspected.")
-                if "DQ_FAIL" in logs or "null_rate" in logs:
-                    rc = RootCause(category="data", subtype="null_spike", confidence=0.80, evidence=evidence)
-                    return Diagnosis(root_cause=rc, notes="Data quality failure suspected (null spike).")
 
-                rc = RootCause(category="unknown", subtype="unknown", confidence=0.40, evidence=evidence)
-                return Diagnosis(root_cause=rc, notes="Unable to classify root cause confidently.")
-
-        # LLM not configured: use rule-based diagnosis
+    def _diagnose_from_rules(self, incident: Incident, logs: str) -> Diagnosis:
         evidence = incident.evidence + [logs]
         if "partition" in logs or "not found" in logs:
             rc = RootCause(category="data", subtype="missing_partition", confidence=0.85, evidence=evidence)
@@ -111,103 +56,30 @@ class SREAgent:
         rc = RootCause(category="unknown", subtype="unknown", confidence=0.40, evidence=evidence)
         return Diagnosis(root_cause=rc, notes="Unable to classify root cause confidently.")
 
-    def plan(self, incident: Incident, diagnosis: Diagnosis) -> Plan:
+    def diagnose(self, incident: Incident) -> Diagnosis:
+        logs = self.tools.get_logs(incident.run_id)
+
         if self.llm is not None:
-            # provide tool list as constraints 
-            tool_caps = self.tools.c.call("get_logs", {"run_id": incident.run_id})
-            payload = {
+            health = self.tools.verify_health(pipeline=incident.pipeline)["checks"]
+            dq = self.tools.dq_check(pipeline=incident.pipeline)["dq"]
+            user = {
                 "incident": incident.model_dump(),
-                "diagnosis": diagnosis.model_dump(),
-                "constraints": {
-                    "available_actions": [
-                    "rerun", "backfill", "scale_memory", "use_cache",
-                    "increase_concurrency", "open_ticket", "noop" 
-                    ],
-                    "notes": "Do not propose code changes: open_ticket instead."
-                },
+                "logs": logs,
+                "health": health,
+                "dq": dq,
             }
             try:
-                plan = self.llm.generate_json(
-                    system=PLAN_SYSTEM,
-                    user=json.dumps(payload, indent=2),
-                    schema=Plan,
+                return self.llm.generate_json(
+                    system=DIAGNOSE_SYSTEM,
+                    user=json.dumps(user, indent=2),
+                    schema=Diagnosis,
                 )
-                return self.policy.apply(plan, diagnosis)
             except Exception:
-                # Retrieve runbook context (if RAG available)
-                docs = []
-                if self.rag is not None:
-                    query = f"{incident.pipeline} {incident.stage}{incident.symptom}{diagnosis.root_cause}"
-                    docs = self.rag.retrieve(query, k=2)
-                runbook_context = "\n\n".join([f"## {d.title}\n{d.content}" for d in docs if d.score > 0]) if docs else ""
-                
-                root = diagnosis.root_cause.subtype
-                # Minimal planning logic grounded by diagnosis
-                steps:list[PlanStep] = []
-                
-                if root == "missing_partition":
-                    steps.append(PlanStep(tool="pipeline", action="backfill", args={"partition": "2026-01-01"}, risk="low", estimated_cost_units=1.5))
-                    steps.append(PlanStep(tool="pipeline", action="rerun", args={"run_id": incident.run_id}, risk="low", estimated_cost_units=1.0))
-                elif root == "oom":
-                    # steps.append(PlanStep(tool="k8s", action="scale_memory", args={"run_id": run_id, "memory_mb":2048}, risk="medium")) 
-                    # steps.append(PlanStep(tool="pipeline", action="rerun", args={"run_id": run_id}, risk="low"))
-                    prior = self.memory.success_rate(incident.pipeline, root, "scale_memory")
-                    mem_target = 2048 if prior >= 0.5 else 1536
-                    steps.append(PlanStep(tool="k8s", action="scale_memory",args={"run_id": incident.run_id, "memory_mb":mem_target}, risk="medium", estimated_cost_units=0.5))
-                    steps.append(PlanStep(tool="pipeline", action="rerun", args={"run_id": incident.run_id}, risk="low", estimated_cost_units=1.0))
-                elif root == "dependency_outage":
-                    #  Prefer caache fallback (safe+cheap), then rerun
-                    steps.append(PlanStep(tool="pipeline", action="use_cache", 
-                                        args={"run_id": incident.run_id, "enabled":True},
-                                        risk="low", estimated_cost_units=0.2))
-                    steps.append(PlanStep(tool="pipeline", action="rerun",
-                                        args={"run_id": incident.run_id}, risk="low", estimated_cost_units=1.0))
-                elif root == "sla_miss":
-                    # Performance optimization: increase concurrency
-                    steps.append(PlanStep(tool="platform", action="increase_concurrency", 
-                                        args={"run_id": incident.run_id, "concurrency": 4},
-                                        risk="medium", estimated_cost_units=0.4))  
-                    steps.append(PlanStep(tool="pipeline", action="rerun",
-                                        args={"run_id": incident.run_id}, risk="low", estimated_cost_units=1.0)) 
-                elif root == "null_spike":
-                    # data quality issues: rerun likely won't help. Use cache or escalate
-                    steps.append(PlanStep(tool="pipeline", action="use_cache",
-                                        args={"run_id": incident.run_id, "enabled": True},
-                                        risk="medium", estimated_cost_units=0.2))
-                    steps.append(PlanStep(tool="pipeline", action="rerun",
-                                        args={"run_id": incident.run_id}, risk="low", estimated_cost_units=1.0))
-                    
-                elif root == "schema_mismatch":
-                    steps.append(PlanStep(tool="itsm", action="open_ticket",
-                                        args={"title": "Schema mismatch: requires code/config update",
-                                        "run_id": incident.run_id},
-                                        risk="high", estimated_cost_units=0.1))
-                
-                else:
-                    steps.append(PlanStep(tool="human", action="noop",
-                                        args={"reason":"unknown root cause; escalte"},
-                                        risk="high", estimated_cost_units=0.0))
-                summary = f"Diagnosis: {diagnosis.root_cause} (conf={diagnosis.root_cause.confidence:.2f}). Runbook hits: {[d.title for d in docs]}."
-                if runbook_context:
-                    summary += " Using runbook guidance."
-                    
-                risk = "low"
-                if any(s.risk == "high" for s in steps):
-                    risk = "high"
-                elif any(s.risk == "medium" for s in steps):
-                    risk = "medium"
-                    
-                total_cost = sum(s.estimated_cost_units for s in steps)
-                plan = Plan(
-                    summary=summary,
-                    steps=steps,
-                    expected_outcome="Restore pipeline health and pass DQ + consecutive checks",
-                    risk_overall=risk,
-                    total_cost_units=total_cost,
-                )
-                return self.policy.apply(plan, diagnosis)
+                return self._diagnose_from_rules(incident, logs)
 
-        # LLM not configured or not used: rule-based planning
+        return self._diagnose_from_rules(incident, logs)
+
+    def _build_plan_from_rules(self, incident: Incident, diagnosis: Diagnosis) -> Plan:
         docs = []
         if self.rag is not None:
             query = f"{incident.pipeline} {incident.stage}{incident.symptom}{diagnosis.root_cause}"
@@ -241,8 +113,70 @@ class SREAgent:
             summary += " Using runbook guidance."
         risk = "high" if any(s.risk == "high" for s in steps) else ("medium" if any(s.risk == "medium" for s in steps) else "low")
         total_cost = sum(s.estimated_cost_units for s in steps)
-        plan = Plan(summary=summary, steps=steps, expected_outcome="Restore pipeline health and pass DQ + consecutive checks", risk_overall=risk, total_cost_units=total_cost)
-        return self.policy.apply(plan, diagnosis)
+        return Plan(
+            summary=summary,
+            steps=steps,
+            expected_outcome="Restore pipeline health and pass DQ + consecutive checks",
+            risk_overall=risk,
+            total_cost_units=total_cost,
+        )
+
+    def plan(self, incident: Incident, diagnosis: Diagnosis) -> Plan:
+        if self.llm is not None:
+            payload = {
+                "incident": incident.model_dump(),
+                "diagnosis": diagnosis.model_dump(),
+                "constraints": {
+                    "available_actions": [
+                    "rerun", "backfill", "scale_memory", "use_cache",
+                    "increase_concurrency", "open_ticket", "noop" 
+                    ],
+                    "notes": "Do not propose code changes: open_ticket instead."
+                },
+            }
+            try:
+                plan = self.llm.generate_json(
+                    system=PLAN_SYSTEM,
+                    user=json.dumps(payload, indent=2),
+                    schema=Plan,
+                )
+                return self.policy.apply(plan, diagnosis)
+            except Exception:
+                return self.policy.apply(self._build_plan_from_rules(incident, diagnosis), diagnosis)
+
+        return self.policy.apply(self._build_plan_from_rules(incident, diagnosis), diagnosis)
+
+    def _execute_step(self, step: PlanStep) -> Any:
+        """Execute a single plan step; returns outcome for audit."""
+
+        def open_ticket(s: PlanStep) -> Any:
+            console.print(f"[cyan]Opened ticket:[/cyan] {s.args}")
+            return {"opened": s.args}
+
+        def noop(s: PlanStep) -> Any:
+            console.print(f"[yellow]No-op:[/yellow] {s.args.get('reason', '')}")
+            return {"reason": s.args.get("reason", "")}
+
+        handlers: Dict[str, Callable[[PlanStep], Any]] = {
+            "backfill": lambda s: self.tools.backfill(partition=s.args["partition"]),
+            "scale_memory": lambda s: self.tools.scale_memory(
+                run_id=s.args["run_id"], memory_mb=int(s.args["memory_mb"])
+            ),
+            "use_cache": lambda s: self.tools.use_cache(
+                run_id=s.args["run_id"], enabled=bool(s.args.get("enabled", True))
+            ),
+            "increase_concurrency": lambda s: self.tools.increase_concurrency(
+                run_id=s.args["run_id"], concurrency=int(s.args["concurrency"])
+            ),
+            "rerun": lambda s: self.tools.rerun_pipeline(run_id=s.args["run_id"]),
+            "open_ticket": open_ticket,
+            "noop": noop,
+        }
+
+        if step.action in handlers:
+            return handlers[step.action](step)
+        console.print(f"[red]Unknown action[/red]: {step.action}")
+        return {"error": "unknown_action"}
 
     def act(
         self,
@@ -278,31 +212,7 @@ class SREAgent:
                     return step_results
 
             step_results.append({"step_index": i, "approved": approved, "outcome": None})
-
-            if step.action == "backfill":
-                out = self.tools.backfill(partition=step.args["partition"])
-                step_results[-1]["outcome"] = out
-            elif step.action == "scale_memory":
-                out = self.tools.scale_memory(run_id=step.args["run_id"], memory_mb=int(step.args["memory_mb"]))
-                step_results[-1]["outcome"] = out
-            elif step.action == "use_cache":
-                out = self.tools.use_cache(run_id=step.args["run_id"], enabled=bool(step.args.get("enabled", True)))
-                step_results[-1]["outcome"] = out
-            elif step.action == "increase_concurrency":
-                out = self.tools.increase_concurrency(run_id=step.args["run_id"], concurrency=int(step.args["concurrency"]))
-                step_results[-1]["outcome"] = out
-            elif step.action == "rerun":
-                out = self.tools.rerun_pipeline(run_id=step.args["run_id"])
-                step_results[-1]["outcome"] = out
-            elif step.action == "open_ticket":
-                console.print(f"[cyan]Opened ticket:[/cyan] {step.args}")
-                step_results[-1]["outcome"] = {"opened": step.args}
-            elif step.action == "noop":
-                console.print(f"[yellow]No-op:[/yellow] {step.args.get('reason', '')}")
-                step_results[-1]["outcome"] = {"reason": step.args.get("reason", "")}
-            else:
-                console.print(f"[red]Unknown action[/red]: {step.action}")
-                step_results[-1]["outcome"] = {"error": "unknown_action"}
+            step_results[-1]["outcome"] = self._execute_step(step)
 
         return step_results  
     
@@ -328,7 +238,6 @@ class SREAgent:
         backoff_seconds: float = 1.0,
     ) -> VerificationResult:
         """Run verify() in a loop with backoff until healthy or max_attempts."""
-        import time
         last = self.verify(pipeline, required_consecutive=required_consecutive)
         for _ in range(max_attempts - 1):
             if last.healthy:

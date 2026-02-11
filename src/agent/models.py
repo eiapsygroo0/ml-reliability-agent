@@ -11,7 +11,10 @@ ActionType = Literal["rerun",
                      "open_ticket",
                      "noop",
                      "fix_schema"]
+
 RootCategory = Literal["data", "infra", "code", "dependency", "performance", "unknown"]
+
+
 class Incident(BaseModel):
     incident_id: str
     pipeline: str
@@ -52,5 +55,3 @@ class VerificationResult(BaseModel):
     checks: Dict[str, bool] = Field(default_factory=dict)
     consecutive_successes: int = 0
     notes: str = ""
-    
-    

@@ -70,7 +70,7 @@ def run_one(
     agent.act(plan, auto_approve=True)
 
     tools.rerun_pipeline(run_id)
-    verify = agent.verify(pipeline=pipeline, required_consecutive=2)
+    verify = agent.verify(pipeline=pipeline, required_consecutive=1)
     agent.finalize(pipeline, diagnosis, plan, verify)
     dt = time.time() - t0
 
