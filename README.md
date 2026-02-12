@@ -64,6 +64,9 @@ python -m src.app.eval --report eval_report.json
 2. **Optional: LLM**  
    Set `GEMINI_API_KEY` to use Gemini for diagnosis and planning; otherwise the agent uses rule-based diagnosis and planning.
 
+3. **Optional: RAGEngine** (hybrid retrieval + rerank + Gemini in `src.rag`)  
+   Install the optional deps listed in `requirements.txt` (numpy, faiss-cpu, rank-bm25; sentence-transformers is already optional above). Set `GEMINI_API_KEY`. RAGEngine expects pre-built `index.faiss` and `chunks.npy` in the working directory (or pass `index_path` / `meta_path` to `RAGEngine(...)`).
+
 ## Running
 
 - **Single scenario (interactive)**  
@@ -112,7 +115,7 @@ The eval report (e.g. `eval_report.json`) contains `success_rate`, `diagnosis_ma
 
 - `src/agent/` – SREAgent, policy, memory, models, LLM client and prompts
 - `src/app/` – `main.py` (single scenario), `eval.py` (batch eval), `scenarios.yaml` (expected diagnosis matrix)
-- `src/rag.py` – Simple runbook RAG (keyword overlap)
+- `src/rag.py` – Runbook RAG: `SimpleRunbookRAG` (keyword), `EmbeddingRunbookRAG` (optional embeddings), and optional `RAGEngine` (hybrid + rerank + Gemini; see Setup)
 - `src/simulator/` – Pipeline simulator and failure scenarios
 - `src/tool_api/` – Tool client (stdio JSON-RPC) and helpers
 - `src/tool_registry/` – Tool specs and schemas (single source for stdio and MCP)

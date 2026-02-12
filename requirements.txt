@@ -13,4 +13,10 @@ google-genai>=1.0.0
 mcp>=1.0.0
 
 # Embedding RAG (optional; for EmbeddingRunbookRAG)
-# sentence-transformers>=2.0.0
+sentence-transformers>=2.0.0
+
+# Optional: RAGEngine (hybrid FAISS+BM25 + rerank + Gemini). Requires GEMINI_API_KEY and
+# pre-built index.faiss + chunks.npy. Uncomment to use RAGEngine from src.rag:
+# numpy>=1.20
+# faiss-cpu>=1.7
+# rank-bm25>=0.2
